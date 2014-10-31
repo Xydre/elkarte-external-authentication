@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!DOCTYPE package-info SYSTEM "http://www.elkarte.net/site/package-info">
+<!--
+/**
+ * @package External Authentication
+ *
+ * @author Antony Derham
+ * @copyright 2014 Antony Derham
+ *
+ * @version 1.0
+ */
+-->
+<package-info xmlns="http://www.elkarte.net/site/package-info" xmlns:elk="http://www.elkarte.net/">
+	<id>Ant59:ExternalAuthnetication</id>
+	<name>External Authentication</name>
+	<version>1.0</version>
+	<type>modification</type>
+	<install for="1.0 - 1.0.99">
+		<readme type="inline">This will install External Authentication for Elkarte.</readme>
+		<database>database.php</database>
+		<require-dir name="sources/ext/hybridauth" destination="EXTDIR" />
+		<require-file name="sources/Extauth.controller.php" destination="CONTROLLERDIR" />
+		<require-file name="sources/Extauth.subs.php" destination="SUBSDIR" />
+		<require-file name="sources/Extauth.integration.php" destination="SOURCEDIR" />
+		<require-file name="themes/xydre/Extauth.template.php" destination="" /> <!-- TODO directory -->
+		<require-file name="themes/default/Extauth.template.php" destination="" /> <!-- TODO directory -->
+		<hook hook="integrate_profile_areas" file="SOURCEDIR/Elkarte.integration.php" function="ipa_extauth" />
+	</install>
+
+	<uninstall for="1.0 - 1.0.99">
+		<readme type="inline">This will uninstall External Authentication for Elkarte.</readme>
+	</uninstall>
+</package-info>
