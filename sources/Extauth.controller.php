@@ -224,13 +224,10 @@ class Extauth_Controller extends Action_Controller
 	{
 		global $txt, $modSettings, $context, $user_info;
 
-		// Start collecting together any errors.
-		$reg_errors = Error_Context::context('register', 0);
-
 		// Check they are who they should be
 		checkSession();
 		if (!validateToken('register', 'post', true, false))
-			$reg_errors->addError('token_verification');
+			redirectexit(); // NOPE NOPE NOPE
 
 		// You can't register if it's disabled.
 		if (!empty($modSettings['registration_method']) && $modSettings['registration_method'] == 3)
@@ -276,17 +273,6 @@ class Extauth_Controller extends Action_Controller
 		$regOptions['password'] = generateValidationCode();
 		$regOptions['password_check'] = $regOptions['password'];
 
-		// Lets check for other errors before trying to register the member.
-		if ($reg_errors->hasErrors())
-		{
-			$_REQUEST['step'] = 2;
-
-			// If they've filled in some details but made an error then they need less time to finish
-			$_SESSION['register']['limit'] = 4;
-
-			return $this->action_register();
-		}
-
 		// Registration needs to know your IP
 		$req = request();
 
@@ -294,18 +280,7 @@ class Extauth_Controller extends Action_Controller
 		$regOptions['ip2'] = $req->ban_ip();
 		$memberID = registerMember($regOptions, 'register');
 
-		// If there are "important" errors and you are not an admin: log the first error
-		// Otherwise grab all of them and don't log anything
-		if ($reg_errors->hasErrors(1) && !$user_info['is_admin'])
-			foreach ($reg_errors->prepareErrors(1) as $error)
-				fatal_error($error, 'general');
-
-		// Was there actually an error of some kind dear boy?
-		if ($reg_errors->hasErrors())
-		{
-			$_REQUEST['step'] = 2;
-			return $this->action_register();
-		}
+		// TODO: CHECK REGISTRATION ERRORS!
 
 		// Do our spam protection now.
 		spamProtection('register');
