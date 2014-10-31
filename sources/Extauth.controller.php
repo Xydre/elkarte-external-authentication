@@ -97,60 +97,13 @@ class Extauth_Controller extends Action_Controller
 			}
 			else
 			{
-				// Here, send them to a partially-filled registration page
-				//$context['prefill']['username'] = $profile->displayName;
-				//$context['prefill']['email'] = $profile->email;
-				/* I'm not sure about these prefills now, actually */
-
-				$context['provider'] = $provider;
 				$_SESSION['extauth_info'] = array(
 					'provider' => $provider,
 					'uid' => $profile->identifier,
 					'name' => $profile->displayName,
 				);
 
-				// Check if the administrator has it disabled.
-				if (!empty($modSettings['registration_method']) && $modSettings['registration_method'] == '3')
-					fatal_lang_error('registration_disabled', false);
-				// If this user is an admin - redirect them to the admin registration page.
-				if (allowedTo('moderate_forum') && !$user_info['is_guest'])
-					redirectexit('action=admin;area=regcenter;sa=register');
-				// You are not a guest, so you are a member - and members don't get to register twice! (I have no idea what you're doing here if you're a member, but just to be sure)
-				elseif (empty($user_info['is_guest']))
-					redirectexit();
-
-				// Is the agreement needed? If so, we're doing a "checkbox agreement" regardless of settings (Why? If the user is coming from an external authentication, they want a quick registration, so let's not mess them about with too many steps. We want one single step and then done.)
-				$context['require_agreement'] = !empty($modSettings['requireAgreement']);
-				
-				// Templating time
-				loadLanguage('Login');
-				loadTemplate('Extauth');
-				$context['sub_template'] = 'registration';
-
-				// If you have to agree to the agreement, it needs to be fetched from the file.
-				if ($context['require_agreement'])
-				{
-					// Have we got a localized one?
-					if (file_exists(BOARDDIR . '/agreement.' . $user_info['language'] . '.txt'))
-						$context['agreement'] = parse_bbc(file_get_contents(BOARDDIR . '/agreement.' . $user_info['language'] . '.txt'), true, 'agreement_' . $user_info['language']);
-					elseif (file_exists(BOARDDIR . '/agreement.txt'))
-						$context['agreement'] = parse_bbc(file_get_contents(BOARDDIR . '/agreement.txt'), true, 'agreement');
-					else
-						$context['agreement'] = '';
-		
-					// Nothing to show, lets disable registration and inform the admin of this error
-					if (empty($context['agreement']))
-					{
-						// No file found or a blank file, log the error so the admin knows there is a problem!
-						log_error($txt['registration_agreement_missing'], 'critical');
-						fatal_lang_error('registration_disabled', false);
-					}
-				}
-
-				createToken('register');
-
-				// Forget custom profile fields here. We want username and email. Nothing more.
-				// No need to worry about verification either, since we're coming from an externall;y verified account already
+				redirectexit('action=extauth;sa=register;provider='.$provider);
 			}
 		}
 		catch (Exception $e) {  
@@ -222,12 +175,68 @@ class Extauth_Controller extends Action_Controller
 
 	public function action_register()
 	{
+		global $context, $modSettings, $txt, $user_info;
+
+		$context['provider'] = $_REQUEST['provider'];
+
+		// Check if the administrator has it disabled.
+		if (!empty($modSettings['registration_method']) && $modSettings['registration_method'] == '3')
+			fatal_lang_error('registration_disabled', false);
+		// You are not a guest, so you are a member - and members don't get to register twice! (I have no idea what you're doing here if you're a member, but just to be sure)
+		elseif (empty($user_info['is_guest']))
+			redirectexit();
+
+		// Is the agreement needed? If so, we're doing a "checkbox agreement" regardless of settings (Why? If the user is coming from an external authentication, they want a quick registration, so let's not mess them about with too many steps. We want one single step and then done.)
+		$context['require_agreement'] = !empty($modSettings['requireAgreement']);
+		
+		// Templating time
+		loadLanguage('Login');
+		loadTemplate('Extauth');
+		$context['sub_template'] = 'registration';
+
+		// If you have to agree to the agreement, it needs to be fetched from the file.
+		if ($context['require_agreement'])
+		{
+			// Have we got a localized one?
+			if (file_exists(BOARDDIR . '/agreement.' . $user_info['language'] . '.txt'))
+				$context['agreement'] = parse_bbc(file_get_contents(BOARDDIR . '/agreement.' . $user_info['language'] . '.txt'), true, 'agreement_' . $user_info['language']);
+			elseif (file_exists(BOARDDIR . '/agreement.txt'))
+				$context['agreement'] = parse_bbc(file_get_contents(BOARDDIR . '/agreement.txt'), true, 'agreement');
+			else
+				$context['agreement'] = '';
+
+			// Nothing to show, lets disable registration and inform the admin of this error
+			if (empty($context['agreement']))
+			{
+				// No file found or a blank file, log the error so the admin knows there is a problem!
+				log_error($txt['registration_agreement_missing'], 'critical');
+				fatal_lang_error('registration_disabled', false);
+			}
+		}
+
+		// Were there any errors?
+		$context['registration_errors'] = array();
+		$reg_errors = Error_Context::context('register', 0);
+		if ($reg_errors->hasErrors())
+			$context['registration_errors'] = $reg_errors->prepareErrors();
+
+		createToken('register');
+
+		// Forget custom profile fields here. We want username and email. Nothing more.
+		// No need to worry about verification either, since we're coming from an externall;y verified account already	
+	}
+
+	public function action_register2()
+	{
 		global $txt, $modSettings, $context, $user_info;
+
+		// Start collecting together any errors.
+		$reg_errors = Error_Context::context('register', 0);
 
 		// Check they are who they should be
 		checkSession();
 		if (!validateToken('register', 'post', true, false))
-			redirectexit(); // NOPE NOPE NOPE
+			$reg_errors->addError('token_verification');
 
 		// You can't register if it's disabled.
 		if (!empty($modSettings['registration_method']) && $modSettings['registration_method'] == 3)
@@ -235,15 +244,15 @@ class Extauth_Controller extends Action_Controller
 
 		// Well, if you don't agree, you can't register.
 		if (!empty($modSettings['requireAgreement']) && !isset($_POST['checkbox_agreement']))
-			redirectexit(); // TODO: Redirect to provider reg page
+			$reg_errors->addError('agreement_unchecked');
 
 		// Make sure they came from *somewhere*, have a session.
 		if (!isset($_SESSION['old_url']))
-			redirectexit(); // TODO: Redirect to provider reg page
+			redirectexit('action=register');
 
-		// Check their provider deatils match up correctly
+		// Check their provider deatils match up correctly in case they're pulling something funny
 		if ($_POST['provider'] != $_SESSION['extauth_info']['provider'])
-			redirectexit(); // TODO: Redirect to provider reg page
+			redirectexit('action=register');
 
 		// Clean up
 		foreach ($_POST as $key => $value)
@@ -269,6 +278,12 @@ class Extauth_Controller extends Action_Controller
 			'require' => empty($modSettings['registration_method']) ? 'nothing' : ($modSettings['registration_method'] == 1 ? 'activation' : 'approval'),
 		);
 
+		// Lets check for other errors before trying to register the member.
+		if ($reg_errors->hasErrors())
+		{
+			return $this->action_register();
+		}
+
 		mt_srand(time() + 1277);
 		$regOptions['password'] = generateValidationCode();
 		$regOptions['password_check'] = $regOptions['password'];
@@ -280,7 +295,17 @@ class Extauth_Controller extends Action_Controller
 		$regOptions['ip2'] = $req->ban_ip();
 		$memberID = registerMember($regOptions, 'register');
 
-		// TODO: CHECK REGISTRATION ERRORS!
+		// If there are "important" errors and you are not an admin: log the first error
+		// Otherwise grab all of them and don't log anything
+		if ($reg_errors->hasErrors(1) && !$user_info['is_admin'])
+			foreach ($reg_errors->prepareErrors(1) as $error)
+				fatal_error($error, 'general');
+
+		// One last error check
+		if ($reg_errors->hasErrors())
+		{
+			return $this->action_register();
+		}	
 
 		// Do our spam protection now.
 		spamProtection('register');

@@ -50,11 +50,33 @@ function template_registration()
 	global $context, $scripturl, $txt;
 
 	echo '
-		<form action="', $scripturl, '?action=extauth;sa=register" name="registration" id="registration" method="post" accept-charset="UTF-8">
+		<form action="', $scripturl, '?action=extauth;sa=register2" name="registration" id="registration" method="post" accept-charset="UTF-8">
 			<div class="row">
 				<h2 class="medium-12 large-8 small-centered columns">
 					', /*$txt['login'],*/ 'Register
 				</h2>
+			</div>';
+
+	// Any errors?
+	if (!empty($context['registration_errors']))
+	{
+		echo '
+		<div class="row"><div class="medium-12 large-8 small-centered columns"><div class="panel alert">
+			<span>', $txt['registration_errors_occurred'], '</span>
+			<ul>';
+
+		// Cycle through each error and display an error message.
+		foreach ($context['registration_errors'] as $error)
+			echo '
+				<li>', $error, '</li>';
+
+		echo '
+			</ul>
+		</div></div></div>';
+	}
+
+	echo '
+			<div class="row">
 				<div class="medium-12 large-8 small-centered columns"><div class="panel">
 					<div class="row absorb-input-margin-bottom"><div class="medium-6 columns">
 						<div class="panel callout"><p>We just need a username and email address for your Xydre account</p></div>';
